@@ -187,11 +187,10 @@ static struct opt_entry opt_list[] = {
 		OPT_FMT_STR_ALLOC, &show_uncracked_str},
 	{"test", FLG_TEST_SET, FLG_TEST_CHK,
 		0, ~FLG_TEST_SET & ~FLG_FORMAT & ~FLG_SAVEMEM & ~FLG_DYNFMT &
-		~FLG_MASK_CHK & ~FLG_NOLOG & ~OPT_REQ_PARAM,
-		"%d", &benchmark_time},
+		~FLG_MASK_CHK & ~OPT_REQ_PARAM, "%d", &benchmark_time},
 	{"test-full", FLG_TEST_SET, FLG_TEST_CHK,
 		0, ~FLG_TEST_SET & ~FLG_FORMAT & ~FLG_SAVEMEM & ~FLG_DYNFMT &
-		OPT_REQ_PARAM & ~FLG_NOLOG, "%d", &benchmark_level},
+		OPT_REQ_PARAM, "%d", &benchmark_level},
 #ifdef HAVE_FUZZ
 	{"fuzz", FLG_FUZZ_SET, FLG_FUZZ_CHK,
 		0, ~FLG_FUZZ_DUMP_SET & ~FLG_FUZZ_SET & ~FLG_FORMAT &
@@ -288,7 +287,7 @@ static struct opt_entry opt_list[] = {
 		0, FLG_KEEP_GUESSING},
 	{"stress-test", FLG_LOOPTEST | FLG_TEST_SET, FLG_TEST_CHK,
 		0, ~FLG_TEST_SET & ~FLG_FORMAT & ~FLG_SAVEMEM & ~FLG_DYNFMT &
-		~OPT_REQ_PARAM & ~FLG_NOLOG, "%d", &benchmark_time},
+		~FLG_MASK_CHK & ~OPT_REQ_PARAM, "%d", &benchmark_time},
 	{"tune", FLG_ZERO, 0, 0, OPT_REQ_PARAM,
 		OPT_FMT_STR_ALLOC, &options.tune},
 	{NULL}
@@ -979,13 +978,13 @@ void opt_init(char *name, int argc, char **argv, int show_usage)
 	}
 
 	if (encoding_str)
-		options.input_enc = cp_name2id(encoding_str);
+		options.input_enc = cp_name2id(encoding_str, 1);
 
 	if (target_enc_str)
-		options.target_enc = cp_name2id(target_enc_str);
+		options.target_enc = cp_name2id(target_enc_str, 1);
 
 	if (internal_cp_str)
-		options.internal_cp = cp_name2id(internal_cp_str);
+		options.internal_cp = cp_name2id(internal_cp_str, 1);
 
 	if (options.input_enc && options.input_enc != UTF_8) {
 		if (!options.target_enc)

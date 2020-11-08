@@ -87,8 +87,8 @@ static cl_kernel pbkdf2_init, pbkdf2_loop, solarwinds_loop, solarwinds_final;
 #define STEP                    0
 #define SEED                    128
 
-static const char * warn[] = {
-	"P xfer: "  ,  ", init: "   , ", loop: " , ", final: ", ", res xfer: "
+static const char *warn[] = {
+	"P xfer: ",  ", init: ",  ", loop: ",  ", swloop: ",  ", final: ",  ", res xfer: "
 };
 
 static int split_events[] = { 2, -1, -1 };
@@ -108,12 +108,12 @@ static size_t get_task_max_work_group_size()
 	return s;
 }
 
-#if 0
-struct fmt_main *me;
-#endif
+static void release_clobj(void);
 
 static void create_clobj(size_t gws, struct fmt_main *self)
 {
+	release_clobj();
+
 	key_buf_size = 64 * gws;
 	outsize = sizeof(solarwinds_out) * gws;
 	final_outsize = sizeof(solarwinds_final_out) * gws;

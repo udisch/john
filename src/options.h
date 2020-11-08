@@ -218,6 +218,9 @@ struct options_main {
 /* Ciphertext format name */
 	char *format;
 
+/* Ciphertext format list, as a comma-separated string */
+	char *format_list;
+
 /* Wordlist file name */
 	char *wordlist;
 
@@ -313,6 +316,9 @@ struct options_main {
    is UTF-16 formats like NT, which can use any codepage (or UTF-8) if FMT_ENC
    is set, or ISO-8859-1 only if FMT_ENC is false. */
 	int target_enc;
+
+/* Terminal encoding, as parsed from LC_ALL or LC_CTYPE */
+	int terminal_enc;
 
 /* If different from target_enc, this is an intermediate encoding only
    used within rules/mask processing. This is only applicable for the case

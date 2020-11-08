@@ -82,6 +82,7 @@
 #include "regex.h"
 #include "opencl_common.h"
 #include "mask_ext.h"
+#include "john.h"
 #include "version.h"
 #include "listconf.h" /* must be included after version.h */
 
@@ -344,6 +345,9 @@ static void listconf_list_build_info(void)
 	else
 		puts("Available physical host memory: unknown");
 
+	printf("Terminal locale string: %s\n", john_terminal_locale);
+	printf("Parsed terminal locale: %s\n", cp_id2name(options.terminal_enc));
+
 // OK, now append debugging options, BUT only output  something if
 // one or more of them is set. IF none set, be silent.
 #if defined (DEBUG)
@@ -411,6 +415,9 @@ void listconf_parse_early(void)
 
 	if (!strcasecmp(options.listconf, "encodings"))
 	{
+		if (options.format)
+			error_msg("--format not allowed with \"--list=%s\"\n", options.listconf);
+
 		listEncodings(stdout);
 		exit(EXIT_SUCCESS);
 	}
@@ -479,6 +486,9 @@ void listconf_parse_late(void)
 	if ((options.subformat && !strcasecmp(options.subformat, "list")) ||
 	    (options.listconf && !strcasecmp(options.listconf, "subformats")))
 	{
+		if (options.format)
+			error_msg("--format not allowed with \"--list=subformats\"\n");
+
 		dynamic_DISPLAY_ALL_FORMATS();
 /* NOTE if we have other 'generics', like sha1, sha2, rc4... then EACH of them
    should have a DISPLAY_ALL_FORMATS() function and we can call them here. */
@@ -556,30 +566,45 @@ void listconf_parse_late(void)
 	if (!strcasecmp(options.listconf, "formats")) {
 		struct fmt_main *format;
 		int column = 0, dynamics = 0;
-		int grp_dyna;
+		int grp_dyna, total = 0, add_comma = 0;
+		char *format_option = options.format ? options.format : options.format_list;
 
-		grp_dyna = options.format ?
-			strcmp(options.format, "dynamic") ?
-			0 : strstr(options.format, "*") != 0 : 1;
+		grp_dyna = !format_option || (!strcasestr(format_option, "disabled") && !strcasestr(format_option, "dynamic"));
 
 		format = fmt_list;
 		do {
 			int length;
 			const char *label = format->params.label;
+
+			total++;
+
 			if (grp_dyna && !strncmp(label, "dynamic", 7)) {
 				if (dynamics++)
 					continue;
 				else
 					label = "dynamic_n";
 			}
+
 			length = strlen(label) + 2;
 			column += length;
+			if (add_comma)
+				printf(", ");
+			else
+				add_comma = 1;
 			if (column > 78) {
 				printf("\n");
 				column = length;
 			}
-			printf("%s%s", label, format->next ? ", " : "\n");
+			printf("%s", label);
 		} while ((format = format->next));
+		printf("\n");
+
+		fflush(stdout);
+		fprintf(stderr, "%d formats", total);
+		if (dynamics)
+			fprintf(stderr, " (%d dynamic formats shown as just \"dynamic_n\" here)", dynamics);
+		fprintf(stderr, "\n");
+
 		exit(EXIT_SUCCESS);
 	}
 	if (!strcasecmp(options.listconf, "format-details")) {
@@ -1027,8 +1052,13 @@ void listconf_parse_late(void)
 						        "Test %s %d: ciphertext contains line feed or separator character '%c'\n",
 						        format->params.label, ntests, separator);
 					}
-/* if they are both missing, simply do not output a line at all */
-					if (skip != 3) {
+/*
+ * if they are both unsuitable or it's a magic internal-only test vector,
+ * simply do not output a line at all
+ */
+					if (skip != 3 &&
+					    !strstr(ciphertext, "$elftest") &&
+					    !strstr(ciphertext, "\1\1\1\1\1\1\1\1")) {
 						printf("%s%c%d",
 							   format->params.label, separator, ntests);
 						if (skip < 2) {

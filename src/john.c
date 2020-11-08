@@ -182,10 +182,9 @@ int john_main_process = 1;
 int john_child_count = 0;
 int *john_child_pids = NULL;
 #endif
-char *john_terminal_locale ="C";
+char *john_terminal_locale = "C";
 
 unsigned long long john_max_cands;
-int wildcard_format;
 
 static int children_ok = 1;
 
@@ -197,186 +196,19 @@ static int exit_status = 0;
 
 static void john_register_one(struct fmt_main *format)
 {
-	if (options.format && !strcasecmp(options.format, "all")) {
-		if (options.flags & FLG_TEST_CHK)
-			; /* benchmark needs this string to stay intact */
-		else
-			options.format = NULL;
-	} else
-	if (options.format && !strncasecmp(options.format, "all-", 4)) {
-		options.format += 4;
-	}
-
 	if (options.format) {
-		char *pos = strchr(options.format, '*');
-
-		if (!strncasecmp(options.format, "dynamic=", 8))
-			pos = NULL;
-		else
-		if (pos != strrchr(options.format, '*')) {
-			if (john_main_process)
-			fprintf(stderr, "Only one wildcard allowed in format "
-			        "name\n");
-			error();
-		}
-
-		if (pos) {
-			/* Wildcard, as in --format=office* */
-			wildcard_format = 1;
-
-			if (strncasecmp(format->params.label, options.format,
-			                (int)(pos - options.format)))
+		if (options.format[0] == '-' && options.format[1]) {
+			if (fmt_match(&options.format[1], format, 1))
 				return;
-			/* Trailer wildcard, as in *office or raw*ng */
-			if (pos[1]) {
-				int wild_len = strlen(++pos);
-				int label_len = strlen(format->params.label);
-				const char *p;
-
-				if (wild_len > label_len)
-					return;
-
-				p = &format->params.label[label_len - wild_len];
-
-				if (strcasecmp(p, pos))
-					return;
-			}
-		} else if (strncasecmp(options.format, "dynamic=", 8) &&
-		           (pos = strchr(options.format, '@'))) {
-			char *reject, *algo = strdup(++pos);
-
-			wildcard_format = 1;
-
-			/* Rejections */
-			if ((reject = strcasestr(algo, "-dynamic"))) {
-				if (format->params.flags & FMT_DYNAMIC) {
-					MEM_FREE (algo);
-					return;
-				}
-				memmove(reject, reject + 8, strlen(reject + 7));
-			}
-			if (!strstr(algo, "-opencl") &&
-			    strstr(format->params.label, "-opencl")) {
-				MEM_FREE (algo);
+		} else if (options.format[0] == '+' && options.format[1]) {
+			if (!fmt_match(&options.format[1], format, 0))
 				return;
-			}
-			if ((reject = strcasestr(algo, "-opencl"))) {
-				if (!strstr(format->params.label, "-opencl")) {
-					MEM_FREE (algo);
-					return;
-				}
-				memmove(reject, reject + 7, strlen(reject + 6));
-			}
-			/* Algo match, eg. --format=@xop or --format=@sha384 */
-			if (!strcasestr(format->params.algorithm_name, algo)) {
-				MEM_FREE (algo);
-				return;
-			}
-			MEM_FREE (algo);
-		} else if ((pos = strchr(options.format, '#'))) {
-			char *reject, *algo = strdup(++pos);
-
-			wildcard_format = 1;
-
-			/* -dynamic means "minus dynamic" as in reject them */
-			if ((reject = strcasestr(algo, "-dynamic"))) {
-				if (format->params.flags & FMT_DYNAMIC) {
-					MEM_FREE (algo);
-					return;
-				}
-				memmove(reject, reject + 8, strlen(reject + 7));
-			}
-			/*
-			 * Although -opencl (or not) means we DO want OpenCL (or not),
-			 * as usual!
-			 */
-			if (!strstr(algo, "-opencl") &&
-			    strstr(format->params.label, "-opencl")) {
-				MEM_FREE (algo);
-				return;
-			}
-			if ((reject = strstr(algo, "-opencl"))) {
-				if (!strstr(format->params.label, "-opencl")) {
-					MEM_FREE (algo);
-					return;
-				}
-				memmove(reject, reject + 7, strlen(reject + 6));
-			}
-			/* Name match, eg. --format=#ipmi or --format=#1password */
-			if (!strcasestr(format->params.format_name, algo)) {
-				MEM_FREE (algo);
-				return;
-			}
-			MEM_FREE (algo);
-		}
-		else if (!strcasecmp(options.format, "dynamic") ||
-			 !strcasecmp(options.format, "dynamic-all")) {
-			wildcard_format = 1;
-			if ((format->params.flags & FMT_DYNAMIC) == 0)
-				return;
-		}
-		else if (!strcasecmp(options.format, "cpu")) {
-			wildcard_format = 1;
-			if (strstr(format->params.label, "-opencl") ||
-			    strstr(format->params.label, "-ztex"))
-				return;
-		}
-		else if (!strcasecmp(options.format, "cpu-dynamic")) {
-			wildcard_format = 1;
-			if (strstr(format->params.label, "-opencl"))
-				return;
-			if (format->params.flags & FMT_DYNAMIC)
-				return;
-		}
-		else if (!strcasecmp(options.format, "opencl")) {
-			wildcard_format = 1;
-			if (!strstr(format->params.label, "-opencl"))
-				return;
-		}
-		else if (!strcasecmp(options.format, "mask")) {
-			wildcard_format = 1;
-			if (!(format->params.flags & FMT_MASK))
-				return;
-		}
-#ifdef _OPENMP
-		else if (!strcasecmp(options.format, "omp")) {
-			wildcard_format = 1;
-			if (!(format->params.flags & FMT_OMP))
-				return;
-		}
-		else if (!strcasecmp(options.format, "cpu+omp")) {
-			wildcard_format = 1;
-			if (!(format->params.flags & FMT_OMP))
-				return;
-			if (strstr(format->params.label, "-opencl"))
-				return;
-		}
-		else if (!strcasecmp(options.format, "cpu+omp-dynamic")) {
-			wildcard_format = 1;
-			if (!(format->params.flags & FMT_OMP))
-				return;
-			if (strstr(format->params.label, "-opencl"))
-				return;
-			if (format->params.flags & FMT_DYNAMIC)
-				return;
-		}
-#endif
-		else if (strcasecmp(options.format, format->params.label)) {
-#ifndef DYNAMIC_DISABLED
-			if (!strncasecmp(options.format, "dynamic=", 8) &&
-			    !strcasecmp(format->params.label, "dynamic=")) {
-				DC_HANDLE H;
-				if (!dynamic_compile(options.format, &H)) {
-					if (dynamic_assign_script_to_format(
-						    H, format))
-						return;
-				} else
-					return;
-			} else
-#endif
-				return;
-		}
-	}
+		} else if (!fmt_match(options.format, format, 0))
+			return;
+	} else if (!options.format_list)
+		if (cfg_get_bool(SECTION_DISABLED, SUBSECTION_FORMATS, format->params.label, 0) &&
+		    ((options.flags & FLG_TEST_CHK) || options.listconf))
+			return;
 
 	fmt_register(format);
 }
@@ -389,9 +221,15 @@ static void john_register_all(void)
 #endif
 
 	if (options.format) {
-	/* The case of the expression for this format is significant */
-		if (strncasecmp(options.format, "dynamic=", 8))
+		/* Dynamic compiler format needs case intact and it can't be used with wildcard or lists */
+		if (strncasecmp(options.format, "dynamic=", 8)) {
 			strlwr(options.format);
+
+			if (strchr(options.format, ',')) {
+				options.format_list = options.format;
+				options.format = NULL;
+			}
+		}
 	}
 
 	/* Let ZTEX formats appear before CPU formats */
@@ -430,20 +268,14 @@ static void john_register_all(void)
 	john_register_one(&fmt_crypt);
 #endif
 
+	/* Do we have --format=LIST? If so, re-build fmt_list from it, in requested order. */
+	if (options.format_list && !fmt_check_custom_list())
+		error_msg("Could not parse format list '%s'\n", options.format_list);
+
 	if (!fmt_list) {
 		if (john_main_process)
 		fprintf(stderr, "Unknown ciphertext format name requested\n");
 		error();
-	}
-	/*
-	 * If we used a wildcard to pick format, we want the actually chosen
-	 * one to be filled in.
-	 */
-	if (wildcard_format) {
-		if (options.flags & FLG_TEST_CHK)
-			; /* benchmark needs this string to stay intact */
-		else
-			options.format = NULL;
 	}
 }
 
@@ -532,9 +364,6 @@ static void john_omp_fallback(char **argv) {
 #define OMP_FALLBACK_PATHNAME JOHN_SYSTEMWIDE_EXEC "/" OMP_FALLBACK_BINARY
 #else
 #define OMP_FALLBACK_PATHNAME path_expand("$JOHN/" OMP_FALLBACK_BINARY)
-#endif
-#if HAVE_MPI
-		mpi_teardown();
 #endif
 		execv(OMP_FALLBACK_PATHNAME, argv);
 #ifdef JOHN_SYSTEMWIDE_EXEC
@@ -993,11 +822,10 @@ static void john_load_conf(void)
 	if (!options.input_enc && !(options.flags & FLG_TEST_CHK)) {
 		if ((options.flags & FLG_LOOPBACK_CHK) &&
 		    cfg_get_bool(SECTION_OPTIONS, NULL, "UnicodeStoreUTF8", 0))
-			options.input_enc = cp_name2id("UTF-8");
+			options.input_enc = UTF_8;
 		else {
 			options.input_enc =
-				cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL,
-				                          "DefaultEncoding"));
+				cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL, "DefaultEncoding"), 1);
 		}
 		options.default_enc = options.input_enc;
 	}
@@ -1019,11 +847,9 @@ static void john_load_conf_db(void)
 		    options.target_enc == UTF_8 && options.flags &
 		    (FLG_RULES_IN_USE | FLG_SINGLE_CHK | FLG_BATCH_CHK | FLG_MASK_CHK))
 			if (!(options.internal_cp =
-			    cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL,
-			    "DefaultInternalCodepage"))))
-			options.internal_cp =
-				cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL,
-			            "DefaultInternalEncoding"));
+			      cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL, "DefaultInternalCodepage"), 1)))
+				options.internal_cp =
+					cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL, "DefaultInternalEncoding"), 1);
 	}
 
 	if (!options.unicode_cp)
@@ -1357,10 +1183,6 @@ static void john_load(void)
 			    database.format->params.format_name[0] ? ", " : "",
 			    database.format->params.format_name,
 			    database.format->params.algorithm_name);
-
-			/* Tell External our max length */
-			if (options.flags & FLG_EXTERNAL_CHK)
-				ext_init(options.external, &database);
 		}
 
 		total = database.password_count;
@@ -1618,16 +1440,6 @@ static void john_init(char *name, int argc, char **argv)
 
 	CPU_detect_or_fallback(argv, make_check);
 
-#if HAVE_MPI
-	mpi_setup(argc, argv);
-#else
-	if (getenv("OMPI_COMM_WORLD_SIZE"))
-	if (atoi(getenv("OMPI_COMM_WORLD_SIZE")) > 1) {
-		fprintf(stderr, "ERROR: Running under MPI, but this is NOT an"
-		        " MPI build of John.\n");
-		error();
-	}
-#endif
 #ifdef _OPENMP
 	john_omp_init();
 #endif
@@ -1638,11 +1450,28 @@ static void john_init(char *name, int argc, char **argv)
 #endif
 	}
 
+#if HAVE_MPI
+	mpi_setup(argc, argv);
+#else
+	if (getenv("OMPI_COMM_WORLD_SIZE") && atoi(getenv("OMPI_COMM_WORLD_SIZE")) > 1)
+		error_msg("ERROR: Running under MPI, but this is not an MPI build of John.\n");
+#endif
+
 #if (!AC_BUILT || HAVE_LOCALE_H)
-	if (setlocale(LC_ALL, "")) {
-		john_terminal_locale = str_alloc_copy(setlocale(LC_ALL, NULL));
+	if (setlocale(LC_CTYPE, "")) {
+		char *parsed = setlocale(LC_CTYPE, NULL);
+
+		if (parsed) {
+			char *p;
+
+			john_terminal_locale = str_alloc_copy(parsed);
+			if ((p = strchr(john_terminal_locale, '.')))
+				parsed = ++p;
+			if (strcmp(parsed, "C"))
+				options.terminal_enc = cp_name2id(parsed, 0);
+		}
 #if HAVE_OPENCL
-		if (strchr(john_terminal_locale, '.'))
+		if (options.terminal_enc)
 			sprintf(gpu_degree_sign, "%ls", DEGREE_SIGN);
 #endif
 		/* We misuse ctype macros so this must be reset */
@@ -1882,6 +1711,10 @@ static void john_run(void)
 			MIN(options.req_maxlength,
 			    database.format->params.plaintext_length) :
 			database.format->params.plaintext_length;
+
+		/* Tell External our max length */
+		if (options.flags & FLG_EXTERNAL_CHK)
+			ext_init(options.external, &database);
 
 		/* Some formats have a minimum plaintext length */
 		if (options.eff_maxlength < options.eff_minlength) {

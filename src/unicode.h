@@ -196,6 +196,12 @@ extern unsigned int strlen32(const UTF32* str);
 extern unsigned int strlen16(const UTF16* str);
 
 /*
+ * Return length (in characters) of a string, best-effort. If the string
+ * contains invalid UTF-8, just count bytes from that point.
+ */
+extern size_t strlen_any(const void* str);
+
+/*
  * Return length (in characters) of a UTF-8 string
  * Will return a "truncated" length if fed with invalid data.
  */
@@ -314,7 +320,7 @@ extern UTF8 CP_isDigit[0x100];
 #define enc_toupper(c) (char)CP_up[ARCH_INDEX(c)]
 
 /* Conversion between encoding names and integer id */
-extern int cp_name2id(const char *encoding);
+extern int cp_name2id(const char *encoding, int error_exit);
 extern char *cp_id2name(int encoding);
 extern char *cp_id2macro(int encoding);
 

@@ -448,9 +448,7 @@ void ldr_set_encoding(struct fmt_main *format)
 		    !strcasecmp(format->params.label, "netlm") ||
 		    !strcasecmp(format->params.label, "nethalflm")) {
 			options.target_enc =
-				cp_name2id(cfg_get_param(SECTION_OPTIONS,
-				                         NULL,
-				                         "DefaultMSCodepage"));
+				cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL, "DefaultMSCodepage"), 1);
 			if (options.target_enc)
 				options.default_target_enc = 1;
 			else
@@ -473,16 +471,12 @@ void ldr_set_encoding(struct fmt_main *format)
 	}
 
 	/* john.conf alternative for --internal-codepage */
-	if (options.flags &
-	    (FLG_RULES_IN_USE | FLG_SINGLE_CHK | FLG_BATCH_CHK | FLG_MASK_CHK))
-	if ((!options.target_enc || options.target_enc == UTF_8) &&
-	    !options.internal_cp) {
+	if (options.flags & (FLG_RULES_IN_USE | FLG_SINGLE_CHK | FLG_BATCH_CHK | FLG_MASK_CHK))
+	if ((!options.target_enc || options.target_enc == UTF_8) && !options.internal_cp) {
 		if (!(options.internal_cp =
-			cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL,
-			                         "DefaultInternalCodepage"))))
+		      cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL, "DefaultInternalCodepage"), 1)))
 			options.internal_cp =
-			    cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL,
-			                         "DefaultInternalEncoding"));
+				cp_name2id(cfg_get_param(SECTION_OPTIONS, NULL, "DefaultInternalEncoding"), 1);
 	}
 
 	/* Performance opportunity - avoid unneccessary conversions */
@@ -776,13 +770,15 @@ find_format:
 			retval = valid;
 			*ciphertext = prepared;
 			ldr_set_encoding(alt);
+			*format = alt;
 #ifdef HAVE_OPENCL
 			if (options.acc_devices->count && options.fork &&
-			    strstr(alt->params.label, "-opencl"))
-				*format = alt;
-			else
+			    strstr(alt->params.label, "-opencl")) {
+				/* skip format initialization here */
+			} else
 #endif
-			fmt_init(*format = alt);
+			if (!source) /* not --show */
+				fmt_init(alt);
 #ifdef LDR_WARN_AMBIGUOUS
 			if (!source) /* not --show */
 				continue;
@@ -2213,7 +2209,7 @@ static void ldr_show_pw_line(struct db_main *db, char *line)
 	char *orig_line = NULL;
 	struct fmt_main *format;
 	char *(*split)(char *ciphertext, int index, struct fmt_main *self);
-	int index, count, unify;
+	int index, count;
 	char *login, *ciphertext, *gecos, *home, *uid;
 	char *piece;
 	int pass, found, chars;
@@ -2254,7 +2250,6 @@ static void ldr_show_pw_line(struct db_main *db, char *line)
 
 	if (format) {
 		split = format->methods.split;
-		unify = format->params.flags & FMT_SPLIT_UNIFIES_CASE;
 		if (format->params.flags & FMT_UNICODE) {
 			static int setting = -1;
 			if (setting < 0)
@@ -2272,7 +2267,6 @@ static void ldr_show_pw_line(struct db_main *db, char *line)
 	} else {
 		split = fmt_default_split;
 		count = 1;
-		unify = 0;
 	}
 
 	if (options.target_enc != UTF_8 &&
@@ -2300,8 +2294,6 @@ static void ldr_show_pw_line(struct db_main *db, char *line)
 	for (found = pass = 0; pass == 0 || (pass == 1 && found); pass++)
 	for (index = 0; index < count; index++) {
 		piece = split(ciphertext, index, format);
-		if (unify)
-			piece = strcpy(mem_alloc(strlen(piece) + 1), piece);
 
 		hash = ldr_cracked_hash(piece);
 
@@ -2311,18 +2303,7 @@ static void ldr_show_pw_line(struct db_main *db, char *line)
 
 			if (!ldr_pot_source_cmp(pot, piece))
 				break;
-/* This extra check, along with ldr_cracked_hash() being case-insensitive,
- * is only needed for matching some pot file records produced by older
- * versions of John and contributed patches where split() didn't unify the
- * case of hex-encoded hashes. */
-			if (unify &&
-			    format->methods.valid(pot, format) == 1 &&
-			    !strcmp(split(pot, 0, format), piece))
-				break;
 		} while ((current = current->next));
-
-		if (unify)
-			MEM_FREE(piece);
 
 		if (pass) {
 			chars = 0;
